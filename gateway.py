@@ -50,6 +50,7 @@ from pathlib import Path
 DB_PATH = Path(os.environ.get("TELEMED_DB") or Path(__file__).with_name("telemed.db"))
 CURRENCY = "BDT"
 MIN_ONLINE_AMOUNT = 10.0  # SSLCommerz minimum
+DEMO_START_BALANCE = 10000  # play money shown on the home page in demo mode
 OPEN_STATES = ("unpaid", "pending", "failed")
 
 PAYMENT_SCHEMA = """
@@ -172,6 +173,14 @@ def get_by_tran(con: sqlite3.Connection, tran_id: str) -> dict | None:
 # --------------------------------------------------------------------------
 # Payment lifecycle
 # --------------------------------------------------------------------------
+def demo_balance(con: sqlite3.Connection) -> float:
+    """Play-money balance: the starting amount minus every demo payment that is currently paid.
+    Refunded or deleted payments are not counted, so money comes back automatically."""
+    row = con.execute("SELECT COALESCE(SUM(amount), 0) AS used FROM payments "
+                      "WHERE provider='demo' AND status='paid'").fetchone()
+    return DEMO_START_BALANCE - float(row["used"])
+
+
 def choose_cash(con: sqlite3.Connection, appointment_id: int) -> bool:
     """Patient will pay at the consultation. Status stays 'unpaid'."""
     cur = con.execute(
@@ -235,6 +244,8 @@ def start_payment(con: sqlite3.Connection, appointment_id: int, method: str, cus
 
     ts = now_iso()
     if mode() == "demo":
+        if not simulate_failure and pay["amount"] > demo_balance(con):
+            return {"ok": False, "status": pay["status"], "error": "insufficient_balance"}
         tran_id = f"DEMO-{secrets.token_hex(6).upper()}"
         status = "failed" if simulate_failure else "paid"
         con.execute(

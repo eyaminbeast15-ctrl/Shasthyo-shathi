@@ -216,6 +216,9 @@ TR = {
         "delete_all_q": "Delete all people, records and appointments? This cannot be undone.",
         "confirm_check": "I understand",
         "deleted": "Deleted.",
+        "demo_wallet": "Demo balance",
+        "demo_wallet_note": "Play money only, not real. Payments are deducted from it and refunds are added back.",
+        "pay_low_balance": "Not enough demo balance for this payment.",
         "pay_title": "Payment",
         "pay_status_unpaid": "Unpaid",
         "pay_status_pending": "Waiting for payment",
@@ -368,6 +371,9 @@ TR = {
         "delete_all_q": "সব সদস্য, রেকর্ড ও অ্যাপয়েন্টমেন্ট মুছে ফেলবেন? এটি ফেরানো যাবে না।",
         "confirm_check": "আমি বুঝেছি",
         "deleted": "মুছে ফেলা হয়েছে।",
+        "demo_wallet": "ডেমো ব্যালেন্স",
+        "demo_wallet_note": "এটা শুধু খেলার টাকা, আসল নয়। পেমেন্ট করলে এখান থেকে কাটবে, ফেরত হলে আবার যোগ হবে।",
+        "pay_low_balance": "এই পেমেন্টের জন্য ডেমো ব্যালেন্স যথেষ্ট নয়।",
         "pay_title": "পেমেন্ট",
         "pay_status_unpaid": "অপরিশোধিত",
         "pay_status_pending": "পেমেন্টের অপেক্ষায়",
@@ -723,7 +729,8 @@ DEMO_METHODS = ["bkash", "nagad", "rocket", "card"]
 
 
 def money(amount: float) -> str:
-    return f"৳{num(f'{amount:g}')}"
+    text = f"{amount:,.0f}" if float(amount).is_integer() else f"{amount:,.2f}"
+    return f"৳{num(text)}"
 
 
 def receipt_text(a: dict, doc: dict, pay: dict) -> str:
@@ -791,6 +798,7 @@ def render_checkout(a: dict, pay: dict, prefix: str) -> None:
             st.info(t("pay_live_note"))
         else:
             st.warning(t("pay_demo_note"))
+            st.caption("💰 " + t("demo_wallet") + ": " + money(gateway.demo_balance(con)))
 
         if pay["status"] == "pending":
             if pay.get("gateway_url"):
@@ -830,6 +838,8 @@ def render_checkout(a: dict, pay: dict, prefix: str) -> None:
                 done(t("pay_failed_msg"), "❌")
             elif res.get("error") == "amount_too_small":
                 st.error(t("pay_too_small"))
+            elif res.get("error") == "insufficient_balance":
+                st.error(t("pay_low_balance"))
             else:
                 st.error(t("pay_error", error=res.get("error", "")))
 
@@ -899,6 +909,9 @@ def page_home() -> None:
 
     st.title(t("hello", name=members[0]["name"]))
     st.subheader(t("tagline"))
+    if gateway.mode() == "demo":
+        st.metric("💰 " + t("demo_wallet"), money(gateway.demo_balance(get_db())))
+        st.caption(t("demo_wallet_note"))
     st.button("🩺 " + t("find_doctor"), type="primary", on_click=go, args=("doctors",))
 
     st.markdown(f"#### {t('next_appt')}")
